@@ -1,0 +1,11 @@
+Event: "Advisor load survey result" took	85345223 nanoseconds
+Event: "Old issue detection" took	457619436 nanoseconds
+Additional info: 
+Number of issues detected w/ old mechanism 0
+Number of recommendations detected w/ old mechanism 0
+ 
+Event: "Old issue detection" took	-1878462736 nanoseconds
+Additional info: 
+Number of issues detected w/ old mechanism 65
+Number of recommendations detected w/ old mechanism 68
+ 

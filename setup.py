@@ -21,7 +21,9 @@ ext1 = numpy.distutils.core.Extension(
                "fortran/wrf_rip_phys_routines.f90",
                "fortran/wrf_pw.f90",
                "fortran/wrf_vinterp.f90",
-               "fortran/wrffortran.pyf"]
+               "fortran/wrffortran.pyf"],
+    libraries = ["iomp5"],
+    library_dirs = ["/glade/u/apps/opt/intel/2017u1/compilers_and_libraries_2017/linux/lib/intel64/"]
     )
 
 with open("src/wrf/version.py") as f: 

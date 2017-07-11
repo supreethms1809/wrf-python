@@ -226,8 +226,10 @@ SUBROUTINE DPFCALC(prs, sfp, pf, miy, mjx, mkzh, ter_follow)
     INTEGER, INTENT(IN) :: ter_follow,miy,mjx,mkzh
 
     INTEGER :: i,j,k
-    
+
+    !  do j=1,mjx-1  Artifact of MM5
     DO j = 1,mjx
+    !  do i=1,miy-1  staggered grid
       DO i = 1,miy
           DO k = 1,mkzh
               IF (k .EQ. mkzh) THEN
@@ -365,8 +367,8 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
 
     !  calculated the pressure at full sigma levels (a set of pressure
     !  levels that bound the layers represented by the vertical grid points)
-CALL cpu_time(t1)
-!CALL OMP_SET_NUM_THREADS(16)
+!CALL cpu_time(t1)
+CALL cpu_time(t3)
 !$OMP PARALLEL DO
 DO i = 1,mjx
    DO j = 1,miy
@@ -379,7 +381,10 @@ DO i = 1,mjx
    END DO
 END DO
 !$OMP END PARALLEL DO
-    
+CALL cpu_time(t4)
+print *,'Time for copy is ',(t4-t3)
+
+CALL cpu_time(t1)    
     CALL DPFCALC(prs_new, sfp, prsf, miy, mjx, mkzh, ter_follow)
 
     !  before looping, set lookup table for getting temperature on
@@ -391,13 +396,16 @@ END DO
         RETURN
     END IF
 
-!$OMP PARALLEL DO COLLAPSE(2) PRIVATE(tlcl, ethpari, &
-!$OMP zlcl, kk, ilcl, klcl, tmklift, tvenv, tvlift, ghtlift, & 
-!$OMP facden, tmkenv, qvpenv, eslift, qvplift, buoy, benamin, &
-!$OMP benaccum, zrel, kmax, dz, elfound, &
-!$OMP kel, klfc, &
-!$OMP i,j,k,kpar)
+!!$OMP PARALLEL DO PRIVATE(tlcl,gammam,cpm,ethpari, &
+!!$OMP zlcl,ilcl,klcl,buoy,benamin,benaccum,zrel, &
+!!$OMP qvplift,tmklift,ghtlift,tvlift,tvenv, &
+!!$OMP qvpenv,tmkenv,eslift,elfound)
     DO j = 1,mjx
+!call cpu_time(t3)
+!!$OMP PARALLEL DO PRIVATE(tlcl,gammam,cpm,ethpari, &
+!!$OMP zlcl,ilcl,klcl,buoy,benamin,benaccum,zrel, &
+!!$OMP qvplift,tmklift,ghtlift,tvlift,tvenv, &
+!!$OMP qvpenv,tmkenv,eslift,elfound)
       DO i = 1,miy
           cape(i,j,1) = 0.d0
           cin(i,j,1) = 0.d0
@@ -433,6 +441,8 @@ END DO
                   klcl = 1
               END IF
 
+             ! k = kpar
+             ! DO WHILE (k .GE. 1)!k = kpar, 1, -1
 !$OMP SIMD lastprivate(qvplift,tmklift,ghtlift,tvlift,tmkenv,qvpenv,tvenv,eslift,facden) 
             DO k = kpar,1,-1   
                ! For arrays that go bottom to top
@@ -580,8 +590,11 @@ END DO
 
           END DO
       END DO
+!!$OMP END PARALLEL DO
+!call cpu_time(t4)
+!print *,'Time for a single x ',(t4-t3)
     END DO
-!$OMP END PARALLEL DO
+!!$OMP END PARALLEL DO
 CALL cpu_time(t2)
 print *,'Time taken in seconds ',(t2-t1)
     RETURN
@@ -656,21 +669,13 @@ SUBROUTINE DCAPECALC2D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
     REAL(KIND=8) :: eslift, tmkenv, qvpenv, tonpsadiabat
     REAL(KIND=8) :: benamin, dz, pup, pdn
     REAL(KIND=8), DIMENSION(150) :: buoy, zrel, benaccum
-    REAL(KIND=8), DIMENSION(mkzh,miy,mjx) :: prsf
+    REAL(KIND=8), DIMENSION(miy,mjx,mkzh) :: prsf
     REAL(KIND=8), DIMENSION(150) :: psadithte, psadiprs
     REAL(KIND=8), DIMENSION(150,150) :: psaditmk
     LOGICAL :: elfound
     INTEGER :: tid, nthreads
     REAL :: t1,t2,t3,t4,rate
     REAL(KIND=8), DIMENSION(mkzh) :: eth_temp
-    REAL(KIND=8) :: temp
-    REAL(KIND=8), DIMENSION(mkzh,miy,mjx) :: prs_new
-    REAL(KIND=8), DIMENSION(mkzh,miy,mjx) :: tmk_new
-    REAL(KIND=8), DIMENSION(mkzh,miy,mjx) :: qvp_new
-    REAL(KIND=8), DIMENSION(mkzh,miy,mjx) :: ght_new
-    REAL(KIND=8), DIMENSION(mkzh,miy,mjx) :: cape_new
-    REAL(KIND=8), DIMENSION(mkzh,miy,mjx) :: cin_new
-    REAL(KIND=8), DIMENSION(mkzh) :: tmklift_new
 
     ! To remove compiler warnings
     tmkpari = 0
@@ -703,23 +708,9 @@ SUBROUTINE DCAPECALC2D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
     !           kg/kg (should range from 0.000 to 0.025)
     !
 
-!$OMP PARALLEL DO
-DO i = 1,mjx
-   DO j = 1,miy
-      DO k = 1,mkzh
-         prs_new(k,j,i) = prs(j,i,k)
-         tmk_new(k,j,i) = tmk(j,i,k)
-         qvp_new(k,j,i) = qvp(j,i,k)
-         ght_new(k,j,i) = ght(j,i,k)
-      END DO
-   END DO
-END DO
-!$OMP END PARALLEL DO
-
-
     !  calculated the pressure at full sigma levels (a set of pressure
     !  levels that bound the layers represented by the vertical grid points)
-    CALL DPFCALC(prs_new, sfp, prsf, miy, mjx, mkzh, ter_follow)
+    CALL DPFCALC(prs, sfp, prsf, miy, mjx, mkzh, ter_follow)
 
     !  before looping, set lookup table for getting temperature on
     !  a pseudoadiabat.
@@ -733,13 +724,6 @@ END DO
 CALL OMP_SET_NUM_THREADS(16)
     nthreads = omp_get_num_threads()
 
-!$OMP PARALLEL DO COLLAPSE(2) PRIVATE(tlcl, ethpari, &
-!$OMP zlcl, kk, ilcl, klcl, tmklift, tvenv, tvlift, ghtlift, & 
-!$OMP facden, tmkenv, qvpenv, eslift, qvplift, buoy, benamin, &
-!$OMP benaccum, zrel, kmax, dz, elfound, &
-!$OMP kel, klfc, pavg, p2, p1, totthe, totqvp, totprs, &
-!$OMP i,j,k,kpar, qvppari, tmkpari,p, pup, pdn, q, th, &
-!$OMP pp1, pp2)
     DO j = 1,mjx
       DO i = 1,miy
           cape(i,j,1) = 0.d0
@@ -747,10 +731,10 @@ CALL OMP_SET_NUM_THREADS(16)
               ! find parcel with max theta-e in lowest 3 km agl.
               ethmax = -1.d0
               DO k = 1,mkzh
-                  IF (ght_new(k,i,j)-ter(i,j) .LT. 3000.d0) THEN
-                      tlcl = TLCLC1 / (LOG(tmk_new(k,i,j)**((TLCLC2))/(MAX(qvp_new(k,i,j), 1.d-15)*prs_new(k,i,j)))/(EPS+MAX(qvp_new(k,i,j), 1.d-15))-TLCLC3)+TLCLC4
-                      eth_temp(k) = tmk_new(k,i,j) * (1000.d0/prs_new(k,i,j))**(GAMMA*(1.d0 + GAMMAMD*(MAX(qvp_new(k,i,j), 1.d-15))))*&
-                              EXP((THTECON1/tlcl - THTECON2)*(MAX(qvp_new(k,i,j), 1.d-15))*(1.d0 + THTECON3*(MAX(qvp_new(k,i,j), 1.d-15))))
+                  IF (ght(i,j,k)-ter(i,j) .LT. 3000.d0) THEN
+                      tlcl = TLCLC1 / (LOG(tmk(i,j,k)**((TLCLC2))/(MAX(qvp(i,j,k), 1.d-15)*prs(i,j,k)))/(EPS+MAX(qvp(i,j,k), 1.d-15))-TLCLC3)+TLCLC4
+                      eth_temp(k) = tmk(i,j,k) * (1000.d0/prs(i,j,k))**(GAMMA*(1.d0 + GAMMAMD*(MAX(qvp(i,j,k), 1.d-15))))*&
+                              EXP((THTECON1/tlcl - THTECON2)*(MAX(qvp(i,j,k), 1.d-15))*(1.d0 + THTECON3*(MAX(qvp(i,j,k), 1.d-15))))
                   END IF
               END DO
               DO k =1,mkzh
@@ -767,34 +751,35 @@ CALL OMP_SET_NUM_THREADS(16)
               ! Establish average properties of that parcel
               ! (over depth of approximately davg meters)
 
-              !davg = 500.d0
-              pavg = 500.d0 * prs_new(kpar1,i,j)*&
-                  G/(RD*tvirtual(tmk_new(kpar1,i,j), qvp_new(kpar1,i,j)))
-              p2 = MIN(prs_new(kpar1,i,j)+.5d0*pavg, prsf(mkzh,i,j))
+              davg = 500.d0
+              pavg = davg*prs(i,j,kpar1)*&
+                  G/(RD*tvirtual(tmk(i,j,kpar1), qvp(i,j,kpar1)))
+              p2 = MIN(prs(i,j,kpar1)+.5d0*pavg, prsf(i,j,mkzh))
               p1 = p2 - pavg
               totthe = 0.D0
               totqvp = 0.D0
               totprs = 0.D0
               DO k = mkzh,2,-1
-                  IF (prsf(k,i,j) .LE. p1) EXIT !GOTO 35
-                  IF (prsf(k-1,i,j) .GE. p2) CYCLE !GOTO 34
-                  p = prs_new(k,i,j)
-                  pup = prsf(k,i,j)
-                  pdn = prsf(k-1,i,j)
-                  q = MAX(qvp_new(k,i,j),1.D-15)
-                  th = tmk_new(k,i,j)*(1000.D0/prs_new(k,i,j))**(GAMMA*(1.D0 + GAMMAMD*MAX(qvp_new(k,i,j),1.D-15)))
+             ! DO k = 2,mkzh
+                  IF (prsf(i,j,k) .LE. p1) EXIT !GOTO 35
+                  IF (prsf(i,j,k-1) .GE. p2) CYCLE !GOTO 34
+                  p = prs(i,j,k)
+                  pup = prsf(i,j,k)
+                  pdn = prsf(i,j,k-1)
+                  q = MAX(qvp(i,j,k),1.D-15)
+                  th = tmk(i,j,k)*(1000.D0/p)**(GAMMA*(1.D0 + GAMMAMD*q))
                   pp1 = MAX(p1,pdn)
                   pp2 = MIN(p2,pup)
                   IF (pp2 .GT. pp1) THEN
-                     ! deltap = pp2 - pp1
-                      totqvp = totqvp + MAX(qvp_new(k,i,j),1.D-15)*deltap
-                      totthe = totthe + th*(pp2 - pp1)
-                      totprs = totprs + (pp2 - pp1)
+                      deltap = pp2 - pp1
+                      totqvp = totqvp + q*deltap
+                      totthe = totthe + th*deltap
+                      totprs = totprs + deltap
                   END IF
               END DO
               qvppari = totqvp/totprs
               tmkpari = (totthe/totprs)*&
-                  (prs_new(kpar1,i,j)/1000.D0)**(GAMMA*(1.D0+GAMMAMD*qvp_new(kpar1,i,j)))
+                  (prs(i,j,kpar1)/1000.D0)**(GAMMA*(1.D0+GAMMAMD*qvp(i,j,kpar1)))
        
 !CALL CPU_TIME(t3)
           DO kpar = kpar1, kpar2
@@ -803,16 +788,16 @@ CALL OMP_SET_NUM_THREADS(16)
               ! (note, qvppari and tmkpari already calculated above for 2d
               ! case.)
 
-              !prspari = prs_new(kpar,i,j)
-              !ghtpari = ght_new(kpar,i,j)
+              prspari = prs(i,j,kpar)
+              ghtpari = ght(i,j,kpar)
               gammam = GAMMA * (1.D0 + GAMMAMD*qvppari)
               cpm = CP * (1.D0 + CPMD*qvppari)
 
-              e = MAX(1.D-20,qvppari*prs_new(kpar,i,j)/(EPS + qvppari))
+              e = MAX(1.D-20,qvppari*prspari/(EPS + qvppari))
               tlcl = TLCLC1/(LOG(tmkpari**TLCLC2/e) - TLCLC3) + TLCLC4
-              ethpari = tmkpari*(1000.D0/prs_new(kpar,i,j))**(GAMMA*(1.D0 + GAMMAMD*qvppari))*&
+              ethpari = tmkpari*(1000.D0/prspari)**(GAMMA*(1.D0 + GAMMAMD*qvppari))*&
                   EXP((THTECON1/tlcl - THTECON2)*qvppari*(1.D0 + THTECON3*qvppari))
-              zlcl = ght_new(kpar,i,j) + (tmkpari - tlcl)/(G/cpm)
+              zlcl = ghtpari + (tmkpari - tlcl)/(G/cpm)
 
               ! Calculate buoyancy and relative height of lifted parcel at
               ! all levels, and store in bottom up arrays.  add a level at the
@@ -824,7 +809,7 @@ CALL OMP_SET_NUM_THREADS(16)
               kk = 0
               ilcl = 0
 
-              IF (ght_new(kpar,i,j) .GE. zlcl) THEN
+              IF (ghtpari .GE. zlcl) THEN
                   ! Initial parcel already saturated or supersaturated.
                   ilcl = 2
                   klcl = 1
@@ -837,40 +822,40 @@ CALL OMP_SET_NUM_THREADS(16)
                   kk = kk + 1
 
                   ! Model level is below lcl
-                  IF (ght_new(k,i,j) .LT. zlcl) THEN
+                  IF (ght(i,j,k) .LT. zlcl) THEN
                       qvplift = qvppari
-                      tmklift = tmkpari - G/cpm*(ght_new(k,i,j) - ght_new(kpar,i,j))
-                      tvenv = tvirtual(tmk_new(k,i,j), qvp_new(k,i,j))
+                      tmklift = tmkpari - G/cpm*(ght(i,j,k) - ghtpari)
+                      tvenv = tvirtual(tmk(i,j,k), qvp(i,j,k))
                       tvlift = tvirtual(tmklift, qvplift)
-                      ghtlift = ght_new(k,i,j)
-                  ELSE IF (ght_new(k,i,j) .GE. zlcl .AND. ilcl .EQ. 0) THEN
+                      ghtlift = ght(i,j,k)
+                  ELSE IF (ght(i,j,k) .GE. zlcl .AND. ilcl .EQ. 0) THEN
                       ! This model level and previous model level straddle the
                       ! lcl,
                       ! so first create a new level in the bottom-up array, at
                       ! the lcl.
                       tmklift = tlcl
                       qvplift = qvppari
-                      facden = 1/(ght_new(k,i,j) - ght_new(k+1,i,j))
-                     ! fac1 = (zlcl-ght_new(k+1,i,j))*facden
-                     ! fac2 = (ght_new(k,i,j)-zlcl)*facden
-                      tmkenv = tmk_new(k+1,i,j)*((ght_new(k,i,j)-zlcl)*facden) + tmk_new(k,i,j)*((zlcl-ght_new(k+1,i,j))*facden)
-                      qvpenv = qvp_new(k+1,i,j)*((ght_new(k,i,j)-zlcl)*facden) + qvp_new(k,i,j)*((zlcl-ght_new(k+1,i,j))*facden)
+                      facden = ght(i,j,k) - ght(i,j,k+1)
+                      fac1 = (zlcl-ght(i,j,k+1))/facden
+                      fac2 = (ght(i,j,k)-zlcl)/facden
+                      tmkenv = tmk(i,j,k+1)*fac2 + tmk(i,j,k)*fac1
+                      qvpenv = qvp(i,j,k+1)*fac2 + qvp(i,j,k)*fac1
                       tvenv = tvirtual(tmkenv, qvpenv)
                       tvlift = tvirtual(tmklift, qvplift)
                       ghtlift = zlcl
                       ilcl = 1
                   ELSE
-                      tmklift = TONPSADIABAT(ethpari, prs_new(k,i,j), psadithte, psadiprs,&
+                      tmklift = TONPSADIABAT(ethpari, prs(i,j,k), psadithte, psadiprs,&
                                              psaditmk, GAMMA, errstat, errmsg)
                       eslift = EZERO*EXP(ESLCON1*(tmklift - CELKEL)/(tmklift - ESLCON2))
-                      qvplift = EPS*eslift/(prs_new(k,i,j) - eslift)
-                      tvenv = tvirtual(tmk_new(k,i,j), qvp_new(k,i,j))
+                      qvplift = EPS*eslift/(prs(i,j,k) - eslift)
+                      tvenv = tvirtual(tmk(i,j,k), qvp(i,j,k))
                       tvlift = tvirtual(tmklift, qvplift)
-                      ghtlift = ght_new(k,i,j)
+                      ghtlift = ght(i,j,k)
                   END IF
                   !  Buoyancy
                   buoy(kk) = G*(tvlift - tvenv)/tvenv
-                  zrel(kk) = ghtlift - ght_new(kpar,i,j)
+                  zrel(kk) = ghtlift - ghtpari
                   IF ((kk .GT. 1) .AND. (buoy(kk)*buoy(kk-1) .LT. 0.0D0)) THEN
                       ! Parcel ascent curve crosses sounding curve, so create a
                       ! new level
@@ -995,12 +980,11 @@ CALL OMP_SET_NUM_THREADS(16)
               cape(i,j,mkzh) = cape(i,j,kpar1)
               cin(i,j,mkzh) = cin(i,j,kpar1)
     !  meters agl
-              cin(i,j,mkzh-1) = zrel(klcl) + ght_new(kpar,i,j) - ter(i,j)
+              cin(i,j,mkzh-1) = zrel(klcl) + ghtpari - ter(i,j)
     !  meters agl
-              cin(i,j,mkzh-2) = zrel(klfc) + ght_new(kpar,i,j) - ter(i,j)
+              cin(i,j,mkzh-2) = zrel(klfc) + ghtpari - ter(i,j)
 
       END DO
     END DO
-!$OMP END PARALLEL DO
     RETURN
 END SUBROUTINE DCAPECALC2D

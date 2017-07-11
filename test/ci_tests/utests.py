@@ -4,6 +4,7 @@ import numpy as np
 import numpy.ma as ma
 import os, sys
 import subprocess
+import wrf
 
 from wrf import (getvar, interplevel, interpline, vertcross, vinterp,
                  disable_xarray, xarray_enabled, to_np,
@@ -65,9 +66,9 @@ def make_test(varname, wrf_in, referent, multi=False, repeat=3, pynio=False):
             # NCL
             tol = 0/100.
             atol = 200.0
-            
+            #print cape_3d[0,:]
             #print np.amax(np.abs(to_np(cape_3d[0,:]) - ref_vals[0,:]))
-            nt.assert_allclose(to_np(cape_3d), ref_vals, tol, atol)
+            nt.assert_allclose(to_np(cape_3d[0,:,:]), ref_vals[0,:,:], tol, atol)
         else:
             my_vals = getvar(in_wrfnc, varname, timeidx=timeidx)
             tol = 2/100.
@@ -206,11 +207,12 @@ class WRFLatLonTest(ut.TestCase):
 
 if __name__ == "__main__":
     ignore_vars = []  # Not testable yet
-    wrf_vars = ["avo", "eth", "cape_2d", "cape_3d", "ctt", "dbz", "mdbz", 
-                "geopt", "helicity", "lat", "lon", "omg", "p", "pressure", 
-                "pvo", "pw", "rh2", "rh", "slp", "ter", "td2", "td", "tc", 
-                "theta", "tk", "tv", "twb", "updraft_helicity", "ua", "va", 
-                "wa", "uvmet10", "uvmet", "z", "cfrac"]
+    #wrf_vars = ["avo", "eth", "cape_2d", "cape_3d", "ctt", "dbz", "mdbz", 
+    #            "geopt", "helicity", "lat", "lon", "omg", "p", "pressure", 
+    #            "pvo", "pw", "rh2", "rh", "slp", "ter", "td2", "td", "tc", 
+    #            "theta", "tk", "tv", "twb", "updraft_helicity", "ua", "va", 
+    #            "wa", "uvmet10", "uvmet", "z", "cfrac"]
+    wrf_vars = ["cape_3d"]
     interp_methods = ["interplevel", "vertcross", "interpline", "vinterp"]
     latlon_tests = ["xy", "ll"]
     
